@@ -2902,6 +2902,8 @@ def verificar_rotas_alternativas_ou_plotar_roteiros_com_apoio(df_roteiros_altern
 
             html_content = file.read()
 
+        salvar_rotas_historico(df_pdf)
+
         st.download_button(
             label="Baixar Arquivo HTML",
             data=html_content,
@@ -4443,6 +4445,103 @@ def verificar_preenchimento_df_hoteis(df_hoteis_ref):
 
         st.stop()
 
+def puxar_historico(id_gsheet, lista_abas, lista_nomes_df_hoteis):
+
+    # GCP projeto onde está a chave credencial
+    project_id = "grupoluck"
+
+    # ID da chave credencial do google.
+    secret_id = "cred-luck-aracaju"
+
+    # Cria o cliente.
+    secret_client = secretmanager.SecretManagerServiceClient()
+
+    secret_name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
+    response = secret_client.access_secret_version(request={"name": secret_name})
+
+    secret_payload = response.payload.data.decode("UTF-8")
+
+    credentials_info = json.loads(secret_payload)
+
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+
+    # Use the credentials to authorize the gspread client
+    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    client = gspread.authorize(credentials)
+
+    spreadsheet = client.open_by_key(id_gsheet)
+
+    for index in range(len(lista_abas)):
+
+        aba = lista_abas[index]
+
+        df_hotel = lista_nomes_df_hoteis[index]
+        
+        sheet = spreadsheet.worksheet(aba)
+
+        sheet_data = sheet.get_all_values()
+
+        st.session_state[df_hotel] = pd.DataFrame(sheet_data[1:], columns=sheet_data[0])
+
+def inserir_df_rotas_geradas(aba_excel, df_insercao):
+    
+    # GCP projeto onde está a chave credencial
+    project_id = "grupoluck"
+
+    # ID da chave credencial do google.
+    secret_id = "cred-luck-aracaju"
+
+    # Cria o cliente.
+    secret_client = secretmanager.SecretManagerServiceClient()
+
+    secret_name = f"projects/{project_id}/secrets/{secret_id}/versions/latest"
+    response = secret_client.access_secret_version(request={"name": secret_name})
+
+    secret_payload = response.payload.data.decode("UTF-8")
+
+    credentials_info = json.loads(secret_payload)
+
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+
+    # Use the credentials to authorize the gspread client
+    credentials = Credentials.from_service_account_info(credentials_info, scopes=scopes)
+    client = gspread.authorize(credentials)
+    
+    # Abertura da planilha e aba
+    spreadsheet = client.open_by_key('1Iu3AW8B0e71yii_hvObcRiF3dctKo30lkRyIpVm0XLw')
+    sheet = spreadsheet.worksheet(aba_excel)
+    
+    # Limpeza do intervalo A2:Z10000
+    sheet.batch_clear(["A2:AR10000"])
+    
+    def format_value(value):
+        if isinstance(value, pd.Timestamp):  # Para colunas datetime no DataFrame
+            return value.strftime('%Y-%m-%d %H:%M:%S')
+        elif type(value) is datetime:  # Para objetos do tipo datetime
+            return value.strftime('%Y-%m-%d')
+        elif isinstance(value, float):  # Formatação opcional para floats
+            return f"{value:.2f}"
+        else:
+            return str(value)  # Para outros tipos
+    
+    # Aplicando formatação aos valores do DataFrame
+    data = df_insercao.applymap(format_value).values.tolist()
+    start_cell = "A2"  # Sempre insere a partir da segunda linha
+    sheet.update(start_cell, data)
+
+def salvar_rotas_historico(df_pdf):
+
+    puxar_historico('1Iu3AW8B0e71yii_hvObcRiF3dctKo30lkRyIpVm0XLw', ['Histórico Roteiros'], ['df_historico_roteiros'])
+
+    st.session_state.df_historico_roteiros['Data Execucao'] = pd.to_datetime(st.session_state.df_historico_roteiros['Data Execucao']).dt.date
+
+    st.session_state.df_historico_roteiros = st.session_state.df_historico_roteiros[~((st.session_state.df_historico_roteiros['Servico']==st.session_state.servico_roteiro) & 
+                                                                                      (st.session_state.df_historico_roteiros['Data Execucao']==st.session_state.data_roteiro))].reset_index(drop=True)
+    
+    st.session_state.df_historico_roteiros = pd.concat([st.session_state.df_historico_roteiros, df_pdf], ignore_index=True)
+
+    inserir_df_rotas_geradas('Histórico Roteiros', st.session_state.df_historico_roteiros)
+    
 st.set_page_config(layout='wide')
 
 st.title('Roteirizador de Transfer Out - Noronha')
@@ -5269,6 +5368,8 @@ if 'nome_html' in st.session_state and (len(st.session_state.df_roteiros_alterna
 
                     html_content = file.read()
 
+                salvar_rotas_historico(df_pdf)
+
                 st.download_button(
                     label="Baixar Arquivo HTML",
                     data=html_content,
@@ -5285,3 +5386,60 @@ if 'df_insercao' in st.session_state and len(st.session_state.df_insercao)>0:
         df_insercao = atualizar_banco_dados(st.session_state.df_insercao, 'test_phoenix_noronha')
 
         st.rerun()
+
+if servico_roteiro and data_roteiro:
+
+    enviar_informes = st.button(f'Enviar Informativos de Saída - {servico_roteiro} | {data_roteiro.strftime("%d/%m/%Y")}')
+
+    if enviar_informes:
+
+        puxar_historico('1Iu3AW8B0e71yii_hvObcRiF3dctKo30lkRyIpVm0XLw', ['Histórico Roteiros'], ['df_historico_roteiros'])
+
+        st.session_state.df_historico_roteiros['Data Execucao'] = pd.to_datetime(st.session_state.df_historico_roteiros['Data Execucao']).dt.date
+
+        st.session_state.df_historico_roteiros['Id_Servico'] = pd.to_numeric(st.session_state.df_historico_roteiros['Id_Servico'])
+
+        df_ref_thiago = st.session_state.df_historico_roteiros[(st.session_state.df_historico_roteiros['Data Execucao']==data_roteiro) & 
+                                                               (st.session_state.df_historico_roteiros['Servico']==servico_roteiro)].reset_index(drop=True)
+        
+        df_verificacao = st.session_state.df_router[(st.session_state.df_router['Data Execucao']==data_roteiro) & 
+                                                    (st.session_state.df_router['Servico']==servico_roteiro)].reset_index(drop=True)
+        
+        id_servicos_verificacao = set(df_verificacao['Id_Servico'])
+        id_servicos_ref_thiago = set(df_ref_thiago['Id_Servico'])
+
+        id_servicos_unicos = id_servicos_verificacao - id_servicos_ref_thiago
+
+        reservas_nao_roteirizadas = df_verificacao.loc[~df_verificacao['Id_Servico'].isin(df_ref_thiago['Id_Servico']), 'Reserva'].unique()
+
+        if len(reservas_nao_roteirizadas)>0:
+
+            nome_reservas = ', '.join(reservas_nao_roteirizadas)
+
+            st.warning(f'As reservas {nome_reservas} não foram roteirizadas e, portanto, não foi enviado informativos de saída para elas')
+
+        dict_tag_servico = {'OUT': 'Noronha'}
+
+        if len(df_ref_thiago)>0:
+
+            lista_ids_servicos = df_ref_thiago['Id_Servico'].tolist()
+
+            webhook_thiago = "https://conexao.multiatend.com.br/webhook/luckenvioinformativonoronha"
+            
+            data_roteiro_str = data_roteiro.strftime('%Y-%m-%d')
+            
+            payload = {"data": data_roteiro_str, 
+                       "ids_servicos": lista_ids_servicos, 
+                       "tag_servico": dict_tag_servico[servico_roteiro]}
+
+            response = requests.post(webhook_thiago, json=payload)
+            
+            if response.status_code == 200:
+                
+                    st.success(f"Informativos Enviados com Sucesso!")
+                
+            else:
+                
+                st.error(f"Erro. Favor contactar o suporte")
+
+                st.error(f"{response}")
