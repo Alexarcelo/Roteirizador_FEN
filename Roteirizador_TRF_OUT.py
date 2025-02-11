@@ -4221,7 +4221,7 @@ def objetos_parametros(row1):
 
     with row1[0]:
 
-        intervalo_inicial_noronha = objeto_intervalo('Antecipação Último Hotel | Noronha', time(2, 0), 'intervalo_inicial_noronha')
+        intervalo_inicial_noronha = objeto_intervalo('Antecipação Último Hotel | Noronha', time(1, 30), 'intervalo_inicial_noronha')
 
         intervalo_pu_hotel = objeto_intervalo('Intervalo Hoteis | Primeiro vs Último', time(0, 30), 'intervalo_pu_hotel')
 
