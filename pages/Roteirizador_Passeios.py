@@ -345,7 +345,7 @@ def roteirizar_privativos(roteiro, df_servicos, index, carros):
     
     df_servicos.at[index, 'Carros'] = carros
 
-    return roteiro, df_servicos
+    return roteiro, df_servicos, carros
 
 def preencher_roteiro_carros(df_servicos, roteiro, carros, value):
 
@@ -387,7 +387,7 @@ def gerar_horarios_apresentacao(df_servicos, roteiro, max_hoteis):
 
         if df_servicos.at[index, 'Modo do Servico']=='PRIVATIVO POR VEICULO' or df_servicos.at[index, 'Modo do Servico']=='PRIVATIVO POR PESSOA' or df_servicos.at[index, 'Modo do Servico']=='CADEIRANTE':
 
-            roteiro, df_servicos = roteirizar_privativos(roteiro, df_servicos, index)
+            roteiro, df_servicos, carros = roteirizar_privativos(roteiro, df_servicos, index, carros)
 
         elif df_servicos.at[index, 'Modo do Servico']=='REGULAR':
 
@@ -3216,6 +3216,7 @@ if roteirizar:
     df_router_filtrado = st.session_state.df_router[(st.session_state.df_router['Data Execucao']==data_roteiro) & 
                                                     (st.session_state.df_router['Tipo de Servico']=='TOUR') &  
                                                     (st.session_state.df_router['Status do Servico']!='CANCELADO') & 
+                                                    (st.session_state.df_router['Modo do Servico']=='REGULAR') & 
                                                     (st.session_state.df_router['Servico']==servico_roteiro)].reset_index(drop=True)
     
     df_router_filtrado['Modo do Servico'] = df_router_filtrado.apply(
